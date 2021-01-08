@@ -9,6 +9,8 @@
 
 # Put the rest into a proper main function
 
+# Check create graph is plotting correct weights in correct places
+
 from alpha_vantage.timeseries import TimeSeries
 from alpha_vantage.techindicators import TechIndicators
 from matplotlib.pyplot import figure
@@ -41,12 +43,20 @@ def plot_daily_stock_price(stock_name, stock_data):
     plt.grid()
     plt.show()
 
+def get_edge_weight(last_n_closing_prices, stock_1, stock_2):
+    covariance = np.cov(last_n_closing_prices[stock_1],last_n_closing_prices[stock_2])
+    print("\n Covariance Matrix: ", stock_1, "and", stock_2, " \n", covariance) #find covariance matrix
+    precision_matrix = np.linalg.inv(covariance)
+    print("\n Precision Matrix: ", stock_1, "and", stock_2, " \n", precision_matrix) #find precision matrix
+    edge_weight = np.abs(precision_matrix[0][1])
+    print("\n Edge Weight: ", stock_1, "and", stock_2, " \n", edge_weight) #edge weight = 0 indicates conditional independence
+    return edge_weight
 
-def create_stock_graph(edges):
+
+def create_stock_graph(edges, filename):
     
     #create graph of stocks 
     G = nx.Graph()
-
     for edge in edges:
         print(edges[edge])
         G.add_edge(edge[0], edge[1], weight=edges[edge])
@@ -66,17 +76,23 @@ def create_stock_graph(edges):
     nx.draw_networkx_labels(G, pos, font_size=20, font_family='sans-serif')
 
     plt.axis('off')
+    plt.savefig(filename, dpi=300)
     plt.show()
+    return G
 
 
-def get_edge_weight(last_n_closing_prices, stock_1, stock_2):
-    covariance = np.cov(last_n_closing_prices[stock_1],last_n_closing_prices[stock_2])
-    print("\n Covariance Matrix: ", stock_1, "and", stock_2, " \n", covariance) #find covariance matrix
-    precision_matrix = np.linalg.inv(covariance)
-    print("\n Precision Matrix: ", stock_1, "and", stock_2, " \n", precision_matrix) #find precision matrix
-    edge_weight = np.abs(precision_matrix[0][1])
-    print("\n Edge Weight: ", stock_1, "and", stock_2, " \n", edge_weight) #edge weight = 0 indicates conditional independence
-    return edge_weight
+def penalty_loss_fnctn(graph):
+    #include penalty loss function
+    new_weights = {}
+    tuning = 0.8
+    for (u, v, d) in graph.edges(data=True):
+        print(u, v)
+        print(d.get('weight'))
+        weight = d.get('weight')
+        weight = weight - (tuning*weight)
+        print("New weight", weight)
+        new_weights[u, v] = weight
+    return new_weights
 
 
 
@@ -121,21 +137,24 @@ last_n_closing_prices = {}
 for stock in stock_dict:
     stock_data = stock_dict[stock][0]
     last_n_closing_prices[stock] = stock_data['4. close'].head(n).to_numpy() #why did I previously use tail?
-
-# Prints the nicely formatted dictionary
 pprint.pprint(last_n_closing_prices)
 
+# Calculate edge weights via precision matrix
 combos = list(itertools.combinations(stock_list, 2))
-
-#more efficient way?    
 edge_dict = {}
 for combination in combos:
     print(combination[0], combination[1])
     edge_dict[combination[0], combination[1]] = get_edge_weight(last_n_closing_prices, combination[0], combination[1])
 
-# Prints the nicely formatted dictionary
+# Print edge weights representing relationship between each pair of stocks
 print("\n Calculated Network Weights between Stocks \n")
 pprint.pprint(edge_dict)
 
+# Create network of stocks
+initial_network = create_stock_graph(edge_dict, "Network_Before_Regularization.png")
 
-network = create_stock_graph(edge_dict)
+# Apply penalty loss function
+updated_weights = penalty_loss_fnctn(initial_network)
+
+# Create updated network of stocks
+regularized_network = create_stock_graph(updated_weights, "Network_After_Regularization.png")
