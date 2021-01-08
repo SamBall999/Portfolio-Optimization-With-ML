@@ -11,6 +11,8 @@
 
 # Check create graph is plotting correct weights in correct places
 
+# Add a delay/timer in order to investigate more than 5 stocks
+
 from alpha_vantage.timeseries import TimeSeries
 from alpha_vantage.techindicators import TechIndicators
 from matplotlib.pyplot import figure
@@ -25,11 +27,12 @@ import sklearn as sklearn
 from sklearn.covariance import GraphicalLasso
 
 """
-Compare ranges and distribution of depth predictions for each network against the ground truth range.
+Uses a graphical network together with LASSO regularization to locate independent stocks.
 Inputs:
-File names of each 16-bit depth maps and corresponding ground truth file.
+- List of stock symbols to compare
+- Number of days included in covariance calculation
 Returns:
-Violin plot comparing distributions of predicted depths and individual distribution plots for each network.
+Graphical network showing conditional independence between stocks.
 """
 
 
@@ -62,12 +65,10 @@ def create_stock_graph(edges, filename):
     for edge in edges:
         print(edges[edge])
         G.add_edge(edge[0], edge[1], weight=edges[edge])
-        
-    #G.add_edge('WELL', 'AMD', weight=0.32)
 
     elarge = [(u, v) for (u, v, d) in G.edges(data=True) if d['weight'] > 0.5]
     #esmall = [(u, v) for (u, v, d) in G.edges(data=True) if d['weight'] <= 0.5]
-    esmall = [(u, v) for (u, v, d) in G.edges(data=True) if d['weight'] >= 0.1]
+    esmall = [(u, v) for (u, v, d) in G.edges(data=True) if d['weight'] >= 0.2] #how to choose these thresholds??
     pos = nx.spring_layout(G)  # positions for all nodes
 
     # nodes
