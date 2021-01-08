@@ -21,6 +21,8 @@ import pprint as pprint
 import networkx as nx
 import sys
 import itertools
+import sklearn as sklearn
+from sklearn.covariance import GraphicalLasso
 
 """
 Compare ranges and distribution of depth predictions for each network against the ground truth range.
@@ -64,7 +66,8 @@ def create_stock_graph(edges, filename):
     #G.add_edge('WELL', 'AMD', weight=0.32)
 
     elarge = [(u, v) for (u, v, d) in G.edges(data=True) if d['weight'] > 0.5]
-    esmall = [(u, v) for (u, v, d) in G.edges(data=True) if d['weight'] <= 0.5]
+    #esmall = [(u, v) for (u, v, d) in G.edges(data=True) if d['weight'] <= 0.5]
+    esmall = [(u, v) for (u, v, d) in G.edges(data=True) if d['weight'] >= 0.1]
     pos = nx.spring_layout(G)  # positions for all nodes
 
     # nodes
@@ -93,6 +96,24 @@ def penalty_loss_fnctn(graph):
         print("New weight", weight)
         new_weights[u, v] = weight
     return new_weights
+
+
+def lasso_regularization(cov_dict):
+    #include penalty loss function
+    regularized_weights = {}
+    alpha = 0.2
+    for combo, covariance in cov_dict.items():
+        print(combo)
+        print("Covariance: ", covariance)
+        lasso_result = sklearn.covariance.graphical_lasso(covariance, alpha, cov_init=None, 
+                                   mode='cd', tol=0.0001, enet_tol=0.0001, 
+                                   max_iter=100, verbose=False, return_costs=False, 
+                                   eps=2.220446049250313e-16, return_n_iter=False)
+        precision_matrix = lasso_result[1]
+        reg_weight = np.abs(precision_matrix[0][1])
+        print("Regularized weight", reg_weight)
+        regularized_weights[combo] = reg_weight
+    return regularized_weights
 
 
 
@@ -141,9 +162,11 @@ pprint.pprint(last_n_closing_prices)
 
 # Calculate edge weights via precision matrix
 combos = list(itertools.combinations(stock_list, 2))
+covariance_dict = {}
 edge_dict = {}
 for combination in combos:
     print(combination[0], combination[1])
+    covariance_dict[combination[0], combination[1]] = np.cov(last_n_closing_prices[combination[0]],last_n_closing_prices[combination[1]])
     edge_dict[combination[0], combination[1]] = get_edge_weight(last_n_closing_prices, combination[0], combination[1])
 
 # Print edge weights representing relationship between each pair of stocks
@@ -151,10 +174,16 @@ print("\n Calculated Network Weights between Stocks \n")
 pprint.pprint(edge_dict)
 
 # Create network of stocks
-initial_network = create_stock_graph(edge_dict, "Network_Before_Regularization.png")
+initial_network = create_stock_graph(edge_dict, "Initial_Network.png")
 
 # Apply penalty loss function
 updated_weights = penalty_loss_fnctn(initial_network)
 
 # Create updated network of stocks
-regularized_network = create_stock_graph(updated_weights, "Network_After_Regularization.png")
+penalty_network = create_stock_graph(updated_weights, "Network_After_Penalty_Loss_Function.png")
+
+# Apply LASSO regularization
+regularized_weights = lasso_regularization(covariance_dict) #works on covariances
+
+# Create updated network of stocks
+regularized_network = create_stock_graph(regularized_weights, "Network_After_Regularization.png")
