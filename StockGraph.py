@@ -60,15 +60,18 @@ def get_data_from_api(stock_list):
     return stock_dict
 
 
-def plot_daily_stock_price(stock_name, stock_data):
+def plot_daily_stock_price(stock_name, stock_dict):
     """
     Plots a graph showing daily closing stock price for the given stock symbol.
 
     Parameters: 
         stock_name (str): Stock symbol e.g. (AMD) 
-        stock_data (DataFrame): Daily closing price of the given stock 
+        stock_dict (dict): Dictionary containing daily stock prices indexed by stock symbol 
 
     """
+
+    print("\nProducing graph of daily closing price for ", stock_name, " stock...")
+    stock_data = stock_dict[stock_name][0] # get stock data - first entry in tuple
 
     figure(num=None, figsize=(15, 7), dpi=80, facecolor='w', edgecolor='k') #init figure
     stock_data['4. close'].plot() #plot closing price only
@@ -79,6 +82,24 @@ def plot_daily_stock_price(stock_name, stock_data):
     plt.grid()
     plt.savefig("Daily Closing Price for " + stock_name + " Stock" , dpi=300)
     plt.show()
+
+
+def get_daily_stock_price_table(stock_name, stock_dict, days):
+    """
+    Prints a table showing daily closing stock price for the given stock symbol and specified number of days.
+
+    Parameters: 
+        stock_name (str): Stock symbol e.g. (AMD) 
+        stock_dict (dict): Dictionary containing daily stock prices indexed by stock symbol
+        days (int):  Number of days displayed
+
+    """
+
+    stock_data = stock_dict[stock_name][0]
+    
+    # Print table of closing prices for last x days
+    print("\nTable showing closing price for", stock_name, "stock over the last", days, "reported days (USD)")
+    print(stock_data['4. close'].head(days))
 
     
 def get_edge_weight(last_n_closing_prices, stock_1, stock_2):
@@ -218,13 +239,11 @@ def main():
     
 
     # Visualization to verify correct data retrieval
-    print("\nProducing graph of daily closing price for ", stock_list[0], " stock...")
-    stock_data = stock_dict[stock_list[0]][0] # get stock data - first entry in tuple
-    plot_daily_stock_price(stock_list[0], stock_data)
+    plot_daily_stock_price(stock_list[0], stock_dict)
 
-    # Print table of closing prices
-    print("\nTable showing closing price for ", stock_list[0], " stock over the last 5 reported days (USD)")
-    print(stock_data['4. close'].head(5))
+
+    # Print table of closing prices for last x days
+    get_daily_stock_price_table(stock_list[0], stock_dict, 5)
 
 
     # Get last n close of day returns for each stock
