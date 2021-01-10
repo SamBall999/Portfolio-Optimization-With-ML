@@ -27,19 +27,29 @@ import sklearn as sklearn
 from sklearn.covariance import GraphicalLasso
 
 """
-Uses a graphical network together with LASSO regularization to locate independent stocks.
-Inputs:
-- List of stock symbols to compare
-- Number of days included in covariance calculation
+Uses a graphical network together with LASSO regularization to locate independent stocks for a diversified portfolio.
+
+Parameters:
+    stock_list (list): List of stock symbols to compare
+    n (int): Number of days included in covariance calculation
+
 Returns:
-Graphical network showing conditional independence between stocks.
+    Graphical network showing conditional independence between stocks.
+
 """
 
 
 def plot_daily_stock_price(stock_name, stock_data):
+    """
+    Plots a graph showing daily closing stock price for the given stock symbol.
 
-    # Plot figure
-    figure(num=None, figsize=(15, 7), dpi=80, facecolor='w', edgecolor='k')
+    Parameters: 
+        stock_name (str): Stock symbol e.g. (AMD) 
+        stock_data (DataFrame): Daily closing price of the given stock 
+
+    """
+
+    figure(num=None, figsize=(15, 7), dpi=80, facecolor='w', edgecolor='k') #init figure
     stock_data['4. close'].plot() #plot closing price only
     plt.tight_layout()
     plt.ylabel("Closing Price (USD)")
@@ -49,6 +59,18 @@ def plot_daily_stock_price(stock_name, stock_data):
     plt.show()
 
 def get_edge_weight(last_n_closing_prices, stock_1, stock_2):
+    """
+    Calculates the edge weight between two stocks in the graphical network.
+
+    Parameters:
+        last_n_closing_prices (dict): Dictionary containing the last n daily closing prices indexed by stock symbol
+        stock_1 (str): Stock symbol specifying first stock in pair
+        stock_2 (str): Stock symbol specifying second stock in pair
+
+    Returns:
+        edge_weight (float): Edge weight indicating strength of relationship between two stocks
+
+    """
     covariance = np.cov(last_n_closing_prices[stock_1],last_n_closing_prices[stock_2])
     print("\n Covariance Matrix: ", stock_1, "and", stock_2, " \n", covariance) #find covariance matrix
     precision_matrix = np.linalg.inv(covariance)
@@ -59,48 +81,79 @@ def get_edge_weight(last_n_closing_prices, stock_1, stock_2):
 
 
 def create_stock_graph(edges, filename):
+    """
+    Constructs a graphical network between stocks based on given edge weights and saves to file.
+
+    Parameters:
+        edges (dict): Dictionary containing edge weights indexed by pairs of stocks
+        filename (str): Filename to save image as
+
+    Returns:
+        g (Graph): Graph object built from given edge weights
+
+    """
     
     #create graph of stocks 
-    G = nx.Graph()
+    g = nx.Graph()
     for edge in edges:
         print(edges[edge])
-        G.add_edge(edge[0], edge[1], weight=edges[edge])
+        g.add_edge(edge[0], edge[1], weight=edges[edge])
 
-    elarge = [(u, v) for (u, v, d) in G.edges(data=True) if d['weight'] > 0.5]
+    elarge = [(u, v) for (u, v, d) in g.edges(data=True) if d['weight'] > 0.5]
     #esmall = [(u, v) for (u, v, d) in G.edges(data=True) if d['weight'] <= 0.5]
-    esmall = [(u, v) for (u, v, d) in G.edges(data=True) if d['weight'] >= 0.2] #how to choose these thresholds??
-    pos = nx.spring_layout(G)  # positions for all nodes
+    esmall = [(u, v) for (u, v, d) in g.edges(data=True) if d['weight'] >= 0.15] #how to choose these thresholds??
+    pos = nx.spring_layout(g)  # positions for all nodes
 
     # nodes
-    nx.draw_networkx_nodes(G, pos, node_size=700)
+    nx.draw_networkx_nodes(g, pos, node_size=700)
     # edges
-    nx.draw_networkx_edges(G, pos, edgelist=elarge, width=6)
-    nx.draw_networkx_edges(G, pos, edgelist=esmall, width=6, alpha=0.5, edge_color='b', style='dashed')
+    nx.draw_networkx_edges(g, pos, edgelist=elarge, width=6)
+    nx.draw_networkx_edges(g, pos, edgelist=esmall, width=6, alpha=0.5, edge_color='b', style='dashed')
     # labels
-    nx.draw_networkx_labels(G, pos, font_size=20, font_family='sans-serif')
+    nx.draw_networkx_labels(g, pos, font_size=20, font_family='sans-serif')
 
     plt.axis('off')
     plt.savefig(filename, dpi=300)
     plt.show()
-    return G
+    return g
 
 
 def penalty_loss_fnctn(graph):
-    #include penalty loss function
+    """
+    Applies a penalty loss function to update network edge weights in order to isolate independent stocks.
+
+    Parameters:
+        graph (Graph): Initial graph object containing original edge weights
+
+    Returns:
+        new_weights (dict): Dictionary containing updated edge weights after penalty loss function, indexed by pairs of stocks
+
+    """
+    
     new_weights = {}
-    tuning = 0.8
+    tuning = 0.8 #how to pick?
     for (u, v, d) in graph.edges(data=True):
         print(u, v)
         print(d.get('weight'))
         weight = d.get('weight')
-        weight = weight - (tuning*weight)
+        weight = weight - (tuning*weight) #update weight
         print("New weight", weight)
         new_weights[u, v] = weight
     return new_weights
 
 
 def lasso_regularization(cov_dict):
-    #include penalty loss function
+    """
+    Applies LASSO regularization as an alternative method of identifying independent stocks.
+
+    Parameters:
+        cov_dict (dict): Dictionary containing covariance between each pair of stocks
+
+    Returns:
+        regularized_weights (dict): Dictionary containing updated edge weights after regularization, indexed by pairs of stocks
+
+    """
+    
     regularized_weights = {}
     alpha = 0.2
     for combo, covariance in cov_dict.items():
@@ -127,7 +180,7 @@ print("------------------------------------------------------------\n")
 
 # Arguments
 stock_list = ['AMD', 'LRCX', 'WELL', 'VNO'] # stock symbols to compare
-n = 5 # number of days used in comparison
+n = 30 # number of days used in comparison - was 5 
 
 # Get time series data, returns a tuple (data, meta_data)
 # First entry is a pandas dataframe containing data, second entry is a dict containing meta_data
