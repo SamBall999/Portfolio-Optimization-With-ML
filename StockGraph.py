@@ -33,6 +33,33 @@ Returns:
 """
 
 
+def get_data_from_api(stock_list):
+    """
+    Sources stock market data from the AlphaVantage API for a given list of stocks.
+
+    Parameters: 
+        stock_list (list): List of stock symbols specifying desired stocks
+
+    Returns:
+        stock_dict (dict): Dictionary containing daily stock prices indexed by stock symbol
+
+    """
+
+    # Get time series data, returns a tuple (data, meta_data)
+    # First entry is a pandas dataframe containing data, second entry is a dict containing meta_data
+    print("Sourcing stock market data from AlphaVantage API...")
+    key = 'RY4QOCLLB7ZIVZ8M' # your API key here
+    ts = TimeSeries(key, output_format='pandas') # choose output format, defaults to JSON (python dict)
+    ti = TechIndicators(key)
+
+    # Create dictionary of form stock_symbol: (data, meta_data)
+    stock_dict = {}
+    for stock in stock_list:
+        print(stock)
+        stock_dict[stock] = ts.get_daily(symbol=stock) 
+    return stock_dict
+
+
 def plot_daily_stock_price(stock_name, stock_data):
     """
     Plots a graph showing daily closing stock price for the given stock symbol.
@@ -53,6 +80,7 @@ def plot_daily_stock_price(stock_name, stock_data):
     plt.savefig("Daily Closing Price for " + stock_name + " Stock" , dpi=300)
     plt.show()
 
+    
 def get_edge_weight(last_n_closing_prices, stock_1, stock_2):
     """
     Calculates the edge weight between two stocks in the graphical network.
@@ -184,18 +212,9 @@ def main():
     stock_list = ['AMD', 'LRCX', 'WELL', 'VNO'] # stock symbols to compare
     n = 30 # number of days used in comparison - was 5 
 
-    # Get time series data, returns a tuple (data, meta_data)
-    # First entry is a pandas dataframe containing data, second entry is a dict containing meta_data
-    print("Sourcing stock market data from AlphaVantage API...")
-    key = 'RY4QOCLLB7ZIVZ8M' # your API key here
-    ts = TimeSeries(key, output_format='pandas') # choose output format, defaults to JSON (python dict)
-    ti = TechIndicators(key)
-
-    # Create dictionary of form stock_symbol: (data, meta_data)
-    stock_dict = {}
-    for stock in stock_list:
-        print(stock)
-        stock_dict[stock] = ts.get_daily(symbol=stock) 
+    
+    # Get time series data for each stock in the specified stock list
+    stock_dict = get_data_from_api(stock_list) 
     
 
     # Visualization to verify correct data retrieval
