@@ -7,6 +7,8 @@
 
 # Add a delay/timer in order to investigate more than 5 stocks
 
+#Somehow tabulate original weights compared to weights after penalty and after regularization (instead of displaying intermittantly)
+
 from alpha_vantage.timeseries import TimeSeries
 from alpha_vantage.techindicators import TechIndicators
 from matplotlib.pyplot import figure
@@ -101,6 +103,28 @@ def get_daily_stock_price_table(stock_name, stock_dict, days):
     print("\nTable showing closing price for", stock_name, "stock over the last", days, "reported days (USD)")
     print(stock_data['4. close'].head(days))
 
+
+def get_last_n_closing_prices(stock_dict, n):
+    """
+    Retrieves daily closing stock prices for the n most recent days, for each stock 
+
+    Parameters: 
+        stock_dict (dict): Dictionary containing daily stock prices indexed by stock symbol
+        n (int):  Number of daily closing prices
+    
+    Returns:
+        last_n_closing_prices (dict): Dictionary containing the last n daily closing prices indexed by stock symbol
+
+    """
+
+    print("\nGet most recent", n, "close of day returns for each stock")
+    last_n_closing_prices = {}
+    for stock in stock_dict:
+        stock_data = stock_dict[stock][0]
+        last_n_closing_prices[stock] = stock_data['4. close'].head(n).to_numpy() #why did I previously use tail?
+    pprint.pprint(last_n_closing_prices)
+    return last_n_closing_prices
+
     
 def get_edge_weight(last_n_closing_prices, stock_1, stock_2):
     """
@@ -122,6 +146,35 @@ def get_edge_weight(last_n_closing_prices, stock_1, stock_2):
     edge_weight = np.abs(precision_matrix[0][1])
     print("\n Edge Weight: ", stock_1, "and", stock_2, " \n", edge_weight) #edge weight = 0 indicates conditional independence
     return edge_weight
+
+
+
+def calculate_edge_weights(stock_list, last_n_closing_prices):
+    """
+    Calculates the edge weights between each pair of stocks in the graphical network.
+
+    Parameters:
+        stock_list (list): List of stock symbols specifying desired stocks
+        last_n_closing_prices (dict): Dictionary containing the last n daily closing prices indexed by stock symbol
+
+    Returns:
+        edge_dict (dict): Dictionary containing edge weights indexed by pairs of stocks
+
+    """
+
+    combos = list(itertools.combinations(stock_list, 2))
+    covariance_dict = {}
+    edge_dict = {}
+    for combination in combos:
+        print(combination[0], combination[1])
+        covariance_dict[combination[0], combination[1]] = np.cov(last_n_closing_prices[combination[0]],last_n_closing_prices[combination[1]])
+        edge_dict[combination[0], combination[1]] = get_edge_weight(last_n_closing_prices, combination[0], combination[1])
+
+    # Print edge weights representing relationship between each pair of stocks
+    print("\n Calculated Network Weights between Stocks \n")
+    pprint.pprint(edge_dict)
+    return edge_dict
+
 
 
 def create_stock_graph(edges, filename):
@@ -235,52 +288,25 @@ def main():
 
     
     # Get time series data for each stock in the specified stock list
-    stock_dict = get_data_from_api(stock_list) 
-    
-
-    # Visualization to verify correct data retrieval
-    plot_daily_stock_price(stock_list[0], stock_dict)
+    stock_dict = get_data_from_api(stock_list) # source data from API
+    plot_daily_stock_price(stock_list[0], stock_dict) # visualization to verify correct data retrieval
+    get_daily_stock_price_table(stock_list[0], stock_dict, 5) # print table of closing prices for last 5 days
 
 
-    # Print table of closing prices for last x days
-    get_daily_stock_price_table(stock_list[0], stock_dict, 5)
+    # Create network of stocks based on conditional independence
+    last_n_prices = get_last_n_closing_prices(stock_dict, n) # get last n close of day returns for each stock
+    edges = calculate_edge_weights(stock_list, last_n_prices) # calculate edge weights via precision matrix
+    initial_network = create_stock_graph(edges, "Initial_Network.png") # plot graphical network 
 
-
-    # Get last n close of day returns for each stock
-    print("\nGet most recent", n, "close of day returns for each stock")
-    last_n_closing_prices = {}
-    for stock in stock_dict:
-        stock_data = stock_dict[stock][0]
-        last_n_closing_prices[stock] = stock_data['4. close'].head(n).to_numpy() #why did I previously use tail?
-    pprint.pprint(last_n_closing_prices)
-
-    # Calculate edge weights via precision matrix
-    combos = list(itertools.combinations(stock_list, 2))
-    covariance_dict = {}
-    edge_dict = {}
-    for combination in combos:
-        print(combination[0], combination[1])
-        covariance_dict[combination[0], combination[1]] = np.cov(last_n_closing_prices[combination[0]],last_n_closing_prices[combination[1]])
-        edge_dict[combination[0], combination[1]] = get_edge_weight(last_n_closing_prices, combination[0], combination[1])
-
-    # Print edge weights representing relationship between each pair of stocks
-    print("\n Calculated Network Weights between Stocks \n")
-    pprint.pprint(edge_dict)
-
-    # Create network of stocks
-    initial_network = create_stock_graph(edge_dict, "Initial_Network.png")
 
     # Apply penalty loss function
     updated_weights = penalty_loss_fnctn(initial_network)
-
-    # Create updated network of stocks
-    penalty_network = create_stock_graph(updated_weights, "Network_After_Penalty_Loss_Function.png")
+    penalty_network = create_stock_graph(updated_weights, "Network_After_Penalty_Loss_Function.png") # create updated network of stocks
+    
 
     # Apply LASSO regularization
     regularized_weights = lasso_regularization(covariance_dict) #works on covariances
-
-    # Create updated network of stocks
-    regularized_network = create_stock_graph(regularized_weights, "Network_After_Regularization.png")
+    regularized_network = create_stock_graph(regularized_weights, "Network_After_Regularization.png") # create updated network of stocks
 
 
 if __name__ == "__main__":
