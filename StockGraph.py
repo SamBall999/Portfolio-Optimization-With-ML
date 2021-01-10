@@ -7,6 +7,8 @@
 
 # Add a delay/timer in order to investigate more than 5 stocks
 
+# how to set threshold for graphs -- adjustable?
+
 #Somehow tabulate original weights compared to weights after penalty and after regularization (instead of displaying intermittantly)
 
 from alpha_vantage.timeseries import TimeSeries
@@ -143,8 +145,7 @@ def get_edge_weight(last_n_closing_prices, stock_1, stock_2):
     print("\n Covariance Matrix: ", stock_1, "and", stock_2, " \n", covariance) #find covariance matrix
     precision_matrix = np.linalg.inv(covariance)
     print("\n Precision Matrix: ", stock_1, "and", stock_2, " \n", precision_matrix) #find precision matrix
-    edge_weight = np.abs(precision_matrix[0][1])
-    print("\n Edge Weight: ", stock_1, "and", stock_2, " \n", edge_weight) #edge weight = 0 indicates conditional independence
+    edge_weight = np.abs(precision_matrix[0][1]) #edge weight = 0 indicates conditional independence
     return edge_weight
 
 
@@ -158,6 +159,7 @@ def calculate_edge_weights(stock_list, last_n_closing_prices):
         last_n_closing_prices (dict): Dictionary containing the last n daily closing prices indexed by stock symbol
 
     Returns:
+        covariance_dict (dict): Dictionary containing covariance between each pair of stocks
         edge_dict (dict): Dictionary containing edge weights indexed by pairs of stocks
 
     """
@@ -166,14 +168,13 @@ def calculate_edge_weights(stock_list, last_n_closing_prices):
     covariance_dict = {}
     edge_dict = {}
     for combination in combos:
-        print(combination[0], combination[1])
         covariance_dict[combination[0], combination[1]] = np.cov(last_n_closing_prices[combination[0]],last_n_closing_prices[combination[1]])
         edge_dict[combination[0], combination[1]] = get_edge_weight(last_n_closing_prices, combination[0], combination[1])
 
     # Print edge weights representing relationship between each pair of stocks
     print("\n Calculated Network Weights between Stocks \n")
     pprint.pprint(edge_dict)
-    return edge_dict
+    return covariance_dict, edge_dict
 
 
 
@@ -193,7 +194,6 @@ def create_stock_graph(edges, filename):
     #create graph of stocks 
     g = nx.Graph()
     for edge in edges:
-        print(edges[edge])
         g.add_edge(edge[0], edge[1], weight=edges[edge])
 
     elarge = [(u, v) for (u, v, d) in g.edges(data=True) if d['weight'] > 0.2] # > 0.5
@@ -227,11 +227,10 @@ def penalty_loss_fnctn(graph):
 
     """
     
+    print("\nApplying penalty loss function...")
     new_weights = {}
     tuning = 0.8 #how to pick?
     for (u, v, d) in graph.edges(data=True):
-        print(u, v)
-        print(d.get('weight'))
         weight = d.get('weight')
         weight = weight - (tuning*weight) #update weight
         print("New weight", weight)
@@ -250,12 +249,10 @@ def lasso_regularization(cov_dict):
         regularized_weights (dict): Dictionary containing updated edge weights after regularization, indexed by pairs of stocks
 
     """
-    
+    print("\nApplying LASSO regularization...")
     regularized_weights = {}
     alpha = 0.2
     for combo, covariance in cov_dict.items():
-        print(combo)
-        print("Covariance: ", covariance)
         lasso_result = sklearn.covariance.graphical_lasso(covariance, alpha, cov_init=None, 
                                    mode='cd', tol=0.0001, enet_tol=0.0001, 
                                    max_iter=100, verbose=False, return_costs=False, 
@@ -295,14 +292,14 @@ def main():
 
     # Create network of stocks based on conditional independence
     last_n_prices = get_last_n_closing_prices(stock_dict, n) # get last n close of day returns for each stock
-    edges = calculate_edge_weights(stock_list, last_n_prices) # calculate edge weights via precision matrix
-    initial_network = create_stock_graph(edges, "Initial_Network.png") # plot graphical network 
+    covariance_dict, edge_dict = calculate_edge_weights(stock_list, last_n_prices) # calculate edge weights via precision matrix
+    initial_network = create_stock_graph(edge_dict, "Initial_Network.png") # plot graphical network 
 
 
     # Apply penalty loss function
     updated_weights = penalty_loss_fnctn(initial_network)
     penalty_network = create_stock_graph(updated_weights, "Network_After_Penalty_Loss_Function.png") # create updated network of stocks
-    
+
 
     # Apply LASSO regularization
     regularized_weights = lasso_regularization(covariance_dict) #works on covariances
