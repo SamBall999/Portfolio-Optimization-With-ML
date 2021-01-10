@@ -1,13 +1,7 @@
 
 #Dependencies: alphavantage, plotly
-#Arguments: 
-# - list of stocks to investigate
 
 # NB - API has a limit of 5 calls for data per minute  -- manage this if you want to compare more? Add a delay?
-
-# Document all functions
-
-# Put the rest into a proper main function
 
 # Check create graph is plotting correct weights in correct places
 
@@ -56,6 +50,7 @@ def plot_daily_stock_price(stock_name, stock_data):
     plt.xlabel("Date")
     plt.title("Daily Closing Price for " + stock_name + " Stock" )
     plt.grid()
+    plt.savefig("Daily Closing Price for " + stock_name + " Stock" , dpi=300)
     plt.show()
 
 def get_edge_weight(last_n_closing_prices, stock_1, stock_2):
@@ -99,9 +94,9 @@ def create_stock_graph(edges, filename):
         print(edges[edge])
         g.add_edge(edge[0], edge[1], weight=edges[edge])
 
-    elarge = [(u, v) for (u, v, d) in g.edges(data=True) if d['weight'] > 0.5]
+    elarge = [(u, v) for (u, v, d) in g.edges(data=True) if d['weight'] > 0.2] # > 0.5
     #esmall = [(u, v) for (u, v, d) in G.edges(data=True) if d['weight'] <= 0.5]
-    esmall = [(u, v) for (u, v, d) in g.edges(data=True) if d['weight'] >= 0.15] #how to choose these thresholds??
+    esmall = [(u, v) for (u, v, d) in g.edges(data=True) if d['weight'] >= 0.01] #how to choose these thresholds??
     pos = nx.spring_layout(g)  # positions for all nodes
 
     # nodes
@@ -171,73 +166,84 @@ def lasso_regularization(cov_dict):
 
 
 
-print("\n----------------------- StockGraph-------------------------\n")
-print("Program to perform portfolio optimization through unsupervised learning and \n graphical networks")
-print("------------------------------------------------------------\n")
+def main():
+    """
+    Creates graphical network of given stocks based on conditional independence between them. 
+    Applies penalty loss function and regularization to isolate independent stocks.
 
-#print 'Number of arguments:', len(sys.argv), 'arguments.'
-#print 'Argument List:', str(sys.argv)
+    """
 
-# Arguments
-stock_list = ['AMD', 'LRCX', 'WELL', 'VNO'] # stock symbols to compare
-n = 30 # number of days used in comparison - was 5 
+    print("\n----------------------- StockGraph-------------------------\n")
+    print("Program to perform portfolio optimization through unsupervised learning and \n graphical networks")
+    print("------------------------------------------------------------\n")
 
-# Get time series data, returns a tuple (data, meta_data)
-# First entry is a pandas dataframe containing data, second entry is a dict containing meta_data
-print("Sourcing stock market data from AlphaVantage API...")
-key = 'RY4QOCLLB7ZIVZ8M' # your API key here
-ts = TimeSeries(key, output_format='pandas') # choose output format, defaults to JSON (python dict)
-ti = TechIndicators(key)
+    #add stock_list and n as commmand line args
+    #print 'Argument List:', str(sys.argv)
 
-# Create dictionary of form stock_symbol: (data, meta_data)
-stock_dict = {}
-for stock in stock_list:
-    print(stock)
-    stock_dict[stock] = ts.get_daily(symbol=stock) 
+    # Arguments
+    stock_list = ['AMD', 'LRCX', 'WELL', 'VNO'] # stock symbols to compare
+    n = 30 # number of days used in comparison - was 5 
+
+    # Get time series data, returns a tuple (data, meta_data)
+    # First entry is a pandas dataframe containing data, second entry is a dict containing meta_data
+    print("Sourcing stock market data from AlphaVantage API...")
+    key = 'RY4QOCLLB7ZIVZ8M' # your API key here
+    ts = TimeSeries(key, output_format='pandas') # choose output format, defaults to JSON (python dict)
+    ti = TechIndicators(key)
+
+    # Create dictionary of form stock_symbol: (data, meta_data)
+    stock_dict = {}
+    for stock in stock_list:
+        print(stock)
+        stock_dict[stock] = ts.get_daily(symbol=stock) 
     
 
-# Visualization to verify correct data retrieval
-print("\nProducing graph of daily closing price for ", stock_list[0], " stock...")
-stock_data = stock_dict[stock_list[0]][0] # get stock data - first entry in tuple
-plot_daily_stock_price(stock_list[0], stock_data)
+    # Visualization to verify correct data retrieval
+    print("\nProducing graph of daily closing price for ", stock_list[0], " stock...")
+    stock_data = stock_dict[stock_list[0]][0] # get stock data - first entry in tuple
+    plot_daily_stock_price(stock_list[0], stock_data)
 
-# Print table of closing prices
-print("\nTable showing closing price for ", stock_list[0], " stock over the last 5 reported days (USD)")
-print(stock_data['4. close'].head(5))
+    # Print table of closing prices
+    print("\nTable showing closing price for ", stock_list[0], " stock over the last 5 reported days (USD)")
+    print(stock_data['4. close'].head(5))
 
 
-# Get last n close of day returns for each stock
-print("\nGet most recent", n, "close of day returns for each stock")
-last_n_closing_prices = {}
-for stock in stock_dict:
-    stock_data = stock_dict[stock][0]
-    last_n_closing_prices[stock] = stock_data['4. close'].head(n).to_numpy() #why did I previously use tail?
-pprint.pprint(last_n_closing_prices)
+    # Get last n close of day returns for each stock
+    print("\nGet most recent", n, "close of day returns for each stock")
+    last_n_closing_prices = {}
+    for stock in stock_dict:
+        stock_data = stock_dict[stock][0]
+        last_n_closing_prices[stock] = stock_data['4. close'].head(n).to_numpy() #why did I previously use tail?
+    pprint.pprint(last_n_closing_prices)
 
-# Calculate edge weights via precision matrix
-combos = list(itertools.combinations(stock_list, 2))
-covariance_dict = {}
-edge_dict = {}
-for combination in combos:
-    print(combination[0], combination[1])
-    covariance_dict[combination[0], combination[1]] = np.cov(last_n_closing_prices[combination[0]],last_n_closing_prices[combination[1]])
-    edge_dict[combination[0], combination[1]] = get_edge_weight(last_n_closing_prices, combination[0], combination[1])
+    # Calculate edge weights via precision matrix
+    combos = list(itertools.combinations(stock_list, 2))
+    covariance_dict = {}
+    edge_dict = {}
+    for combination in combos:
+        print(combination[0], combination[1])
+        covariance_dict[combination[0], combination[1]] = np.cov(last_n_closing_prices[combination[0]],last_n_closing_prices[combination[1]])
+        edge_dict[combination[0], combination[1]] = get_edge_weight(last_n_closing_prices, combination[0], combination[1])
 
-# Print edge weights representing relationship between each pair of stocks
-print("\n Calculated Network Weights between Stocks \n")
-pprint.pprint(edge_dict)
+    # Print edge weights representing relationship between each pair of stocks
+    print("\n Calculated Network Weights between Stocks \n")
+    pprint.pprint(edge_dict)
 
-# Create network of stocks
-initial_network = create_stock_graph(edge_dict, "Initial_Network.png")
+    # Create network of stocks
+    initial_network = create_stock_graph(edge_dict, "Initial_Network.png")
 
-# Apply penalty loss function
-updated_weights = penalty_loss_fnctn(initial_network)
+    # Apply penalty loss function
+    updated_weights = penalty_loss_fnctn(initial_network)
 
-# Create updated network of stocks
-penalty_network = create_stock_graph(updated_weights, "Network_After_Penalty_Loss_Function.png")
+    # Create updated network of stocks
+    penalty_network = create_stock_graph(updated_weights, "Network_After_Penalty_Loss_Function.png")
 
-# Apply LASSO regularization
-regularized_weights = lasso_regularization(covariance_dict) #works on covariances
+    # Apply LASSO regularization
+    regularized_weights = lasso_regularization(covariance_dict) #works on covariances
 
-# Create updated network of stocks
-regularized_network = create_stock_graph(regularized_weights, "Network_After_Regularization.png")
+    # Create updated network of stocks
+    regularized_network = create_stock_graph(regularized_weights, "Network_After_Regularization.png")
+
+
+if __name__ == "__main__":
+    main()
